@@ -1,0 +1,47 @@
+name: Kustomize GitHub Actions
+on:
+  pull_request:
+env:
+  NHST_GITHUB_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+jobs:
+  kustomize:
+    name: 'Kustomize'
+    runs-on: ubuntu-latest
+    env:
+      NHST_GITHUB_AUTH_TOKEN: ${{ vars.NHST_GITHUB_AUTH_TOKEN }}
+    strategy:
+      matrix:
+        environment: [test, stage, prod]
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+      - name: 'Set up environment variables'
+        run: echo "ENVIRONMENT=${{ matrix.environment }}" >> $GITHUB_ENV
+      - name: 'Kustomize Build'
+        uses: karancode/kustomize-github-action@master
+        with:
+          kustomize_version: '5.1.0'
+          kustomize_build_dir: 'apps/${{ matrix.environment }}/blue'
+          kustomize_comment: true
+          kustomize_output_file: "gitops/rendered-${{ matrix.environment }}.yaml"
+          kustomize_build_options: "--load_restrictor none"
+          enable_alpha_plugins: true
+        env:
+          NHST_GITHUB_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+		  
+	    - name: 'View YAML File'
+        run: |
+          cat gitops/rendered-${{ matrix.environment }}.yaml
+
+      - name: 'Notify Slack on failure'
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_COLOR: '#FF0000'
+          SLACK_CHANNEL: 'infra-app-notification'
+          SLACK_ICON: https://icons-for-free.com/download-icon-color+github+icon-1320168272982426740_48.png
+          SLACK_MESSAGE: 'Job failed in the ${{ matrix.environment }} environment.'
+          SLACK_TITLE: 'GitHub Actions - Kustomize Job Failed'
+          SLACK_USERNAME: 'GitHub Actions'
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_SUBSCRIPTION }}
+		  
